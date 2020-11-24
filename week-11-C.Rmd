@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library(PPBDS.data)
 library(rstanarm)
 library(tidyverse)
+library(tidymodels)
 
 # Same data clean up as last week.
 
@@ -25,27 +26,134 @@ week_11 <- shaming %>%
 **Prompt:** Create a fitted model object called `fit_1` using this formula or, if you want, a formula which you prefer. I recommend not making your model execessively complex.
 
 primary_06 ~ solo + primary_04 + treatment + solo:treatment
+```{r}
+fit_1 <- stan_glm(primary_06 ~ solo + primary_04 + treatment + solo*treatment,
+                  data = week_11,
+                  refresh = 0)
+
+print(fit_1, details = FALSE, digits = 5)
+```
 
 (Assume that you have already completed a cross-validation analysis and chosen this one model to use going forward.)
 
 * Which data set should you use to fit the model? Explain why.
 
+We want to use all the data bc we are just trying to understand what happened not what will happen. We aren't worried about overfitting in this situation  
+
 * Interpret the fitted model. Should we keep all these variables? And the interaction term?
 
-
+Each of the variables increased voting. We would keep all the variables and the interaction bc the MAD_SD for each is smaller meaning they are statistically significant. 
 
 ## Scene 2
 
 **Prompt:** What is the causal effect of receiving the Neighbors postcard as compared to being in the control group? Provide a posterior probability distribution.
 
 * One way to answer this question is to use `posterior_predict()`. Do that. Make it look nice! Write a sentence or two interpreting the answer.
+```{r}
+new_obs <- tibble(treatment = c("Control", "Neighbors"),
+                  solo = TRUE,
+                  primary_04 = "Yes")
+
+set.seed(9)
+
+pp <- posterior_predict(fit_1, newdata = new_obs) %>%
+  as_tibble() %>%
+  mutate_all(as.numeric) %>%
+  rename("Control" = `1`, 
+         "Neighbors" = `2`) %>%
+  mutate(causal_effect = Neighbors - Control)
+
+pp %>%
+  ggplot(aes(x = causal_effect)) +
+  geom_histogram(aes(y = after_stat(count/sum(count))),
+                 alpha = 0.5, 
+                 bins = 100, 
+                 color = "white") +
+  labs(title = "Posterior Distribution for Causal Effect of \n Treatement Control and Neighbors",
+       y = "Proportion",
+       x = "Causal Effect") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_bw()
+
+```
+
+Neighbors has a greater treatment effect but just by a little bit 
 
 * A second approach uses `posterior_epred()`. Do that. Make it look nice! Write a sentence or two interpreting the answer.
+```{r}
+p_epred <- posterior_epred(fit_1, newdata = new_obs) %>%
+  as_tibble() %>%
+  mutate_all(as.numeric) %>%
+  rename("Control" = `1`, 
+         "Neighbors" = `2`) %>%
+  mutate(causal_effect = Neighbors - Control)
 
+p_epred %>%
+  ggplot(aes(x = causal_effect)) +
+  geom_histogram(aes(y = after_stat(count/sum(count))),
+                 alpha = 0.5, 
+                 bins = 100, 
+                 color = "white") +
+  labs(title = "Posterior Distribution for Causal Effect of \n Treatement Control and Neighbors",
+       y = "Proportion",
+       x = "Causal Effect") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_bw()
+```
+Not just prediction of the variable, but of the model. Neighbors still has a greater treatment effect ?????????????
 
 ## Scene 3
 
 **Prompt:** There are four primary causal effects of interest: each of the four treatments compared, individually, to Control.  Build a big graphic which shows the four posterior probability distributions of the expected values at once. See #preceptors-notes for my version. You do not need to copy my work! Make something better!
+```{r}
+new_obs2 <- tibble(treatment = c("Control", "Neighbors", "Civic Duty",
+                                "Self", "Hawthorne"),
+                  solo = TRUE,
+                  primary_04 = "Yes")
+
+set.seed(9)
+
+pp2 <- posterior_epred(fit_1, newdata = new_obs) %>%
+  as_tibble() %>%
+  mutate_all(as.numeric) %>%
+  rename("Control" = `1`, 
+         "Neighbors" = `2`,
+         "Civic_Duty" = `3`,
+         "Self" = `4`,
+         "Hawthorne" = `5`) %>%
+  mutate(causal_effectNeighbors = Neighbors - Control,
+         causal_effectCivic_Duty = Civic_Duty - Control,
+         causal_effectSelf = Self - Control,
+         causal_effectHawthorne = Hawthorne - Control)
+
+pp2 %>%
+  pivot_longer(cols = 6:9,
+               names_to = "treatment",
+               values_to = "causal_effect") %>%
+  ggplot(aes(x = causal_effect)) +
+  geom_histogram(aes(y = after_stat(count/sum(count)),
+                     fill = treatment),
+                 alpha = 0.5, 
+                 bins = 100,
+                 position = "identity") +
+  scale_fill_manual(name = "Treatment",
+                    labels = c("Civic Duty",
+                               "Hawthorne",
+                               "Neighbors",
+                               "Self"),
+                    values = c("coral1",
+                               "cornflowerblue",
+                               "bisque1",
+                               "darksalmon")) +
+  labs(title = "Posterior Probability Distribution for Expected Causal Effect",
+       subtitle = "Postcards which show neighborhood voting have the biggest effect",
+       y = "Probalility",
+       x = "Change in Likelihood of Voting") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_bw()
+
+```
+
 
 * Challenge question: Do the same but for both `solo = TRUE` and `solo = FALSE`. This means that there are 8 posterior probability distributions to show. Think hard about the best way to display them. What point are you trying to get across to your readers?
 
