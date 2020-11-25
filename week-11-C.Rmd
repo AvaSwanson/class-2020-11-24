@@ -106,8 +106,11 @@ Not just prediction of the variable, but of the model. Neighbors still has a gre
 
 **Prompt:** There are four primary causal effects of interest: each of the four treatments compared, individually, to Control.  Build a big graphic which shows the four posterior probability distributions of the expected values at once. See #preceptors-notes for my version. You do not need to copy my work! Make something better!
 ```{r}
-new_obs2 <- tibble(treatment = c("Control", "Neighbors", "Civic Duty",
-                                "Self", "Hawthorne"),
+new_obs2 <- tibble(treatment = c("Control", 
+                                 "Neighbors", 
+                                 "Civic Duty", 
+                                 "Self", 
+                                 "Hawthorne"),
                   solo = TRUE,
                   primary_04 = "Yes")
 
